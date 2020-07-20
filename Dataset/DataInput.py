@@ -15,7 +15,7 @@ class databuilder():
         sequence=[]
         for i in range(0,count):
             thispath=path+"br002_"+str(i)+".hdf"
-            #print("Reading Files :",thispath)
+            print("Reading Files :",thispath)
             image_sequence = SD(thispath, SDC.READ)
             sds_obj = image_sequence.select('Data-Set-2')
             dim3 = sds_obj.get()
@@ -75,7 +75,14 @@ class databuilder():
 
     def dataGeneratorTrain(patched_data):
         tensor=tf.convert_to_tensor(patched_data)
-        for i in range(len(tensor)):
+        for i in range(len(tensor)-1000):
+            x=tensor[i,0:10,:,:,:]
+            y=tensor[i,1:11,:,:,:]
+            yield x,y
+
+    def dataGeneratorValidation(patched_data):
+        tensor=tf.convert_to_tensor(patched_data)
+        for i in range((len(tensor)-1000),len(tensor)):
             x=tensor[i,0:10,:,:,:]
             y=tensor[i,1:11,:,:,:]
             yield x,y
@@ -83,18 +90,25 @@ class databuilder():
     def apply_min_max_scaling(data):
         shape=data.shape
         data=minmax_scale(data.ravel(),feature_range=(0,255)).reshape(shape)
-        print("Intresting frames have been selected the shape of the selected data is :")
+        print("Data have been Scaled on Min Max Scale:")
         uf.fn_print(data.shape)
 
         return data
 
 
-    def generatorParametersTrain(OUTPUT_SHAPE=(10,32,32,1), NUM_POINTS=2000,BATCH_SIZE=16,PRE_FETCH=2):
-        ds=tf.data.Dataset.from_generator(databuilder.dataGeneratorTrain,output_types=(tf.float32,tf.float32),
+    def generatorParametersTrain(patched_data,OUTPUT_SHAPE=(10,32,32,1), NUM_POINTS=2000,BATCH_SIZE=16,PRE_FETCH=2):
+        ds_train=tf.data.Dataset.from_generator(lambda: databuilder.dataGeneratorTrain(patched_data),output_types=(tf.float32,tf.float32),
                                           output_shapes=(OUTPUT_SHAPE,OUTPUT_SHAPE))
-        ds=ds.shuffle(1000,reshuffle_each_iteration=True)
-        ds=ds.batch(BATCH_SIZE).prefetch(PRE_FETCH)
-        return ds
+        ds_train=ds_train.shuffle(1000,reshuffle_each_iteration=True)
+        ds_train=ds_train.batch(BATCH_SIZE)#.prefetch(PRE_FETCH)
+        return ds_train
+
+    def generatorParametersValidation(patched_data,OUTPUT_SHAPE=(10,32,32,1), NUM_POINTS=2000,BATCH_SIZE=16,PRE_FETCH=2):
+        ds_val=tf.data.Dataset.from_generator(lambda: databuilder.dataGeneratorValidation(patched_data),output_types=(tf.float32,tf.float32),
+                                          output_shapes=(OUTPUT_SHAPE,OUTPUT_SHAPE))
+        ds_val=ds_val.shuffle(1000,reshuffle_each_iteration=True)
+        ds_val=ds_val.batch(BATCH_SIZE)#.prefetch(PRE_FETCH)
+        return ds_val
 
 def main():
 
